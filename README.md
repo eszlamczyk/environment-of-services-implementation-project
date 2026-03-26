@@ -64,10 +64,50 @@ Grafana is an open-source tool that enables querying, visualization and explorin
 
 
 ## 3. Case study concept description
-[Treść sekcji 3...]
+
+The case study is designed to demonstrate a modernized, GitOps workflow. It simulates a realistic operational scenario where an administrator manages a Kubernetes application deployment not through traditional CLI commands or complex YAML editing, but through natural language interaction, while maintaining complete system observability. 
+
+The concept is divided into three core pillars:
+
+### 3.1 Application deployment & LLM Interaction
+The core application workflow centers around a sample Kubernetes deployment whose desired state is stored in a Git repository. Argo CD is responsible for continuously monitoring this repository and ensuring the Kubernetes cluster matches the defined state.
+Instead of interacting with Argo CD directly via its UI or CLI, the operator uses an AI agent. The Argo CD MCP server is helpful here'. When the operator types a prompt like, *"Check if the frontend application is out of sync and deploy the latest changes,"* the LLM translates this intent into specific tool calls via the MCP server. The MCP server then executes the corresponding Argo CD API commands to retrieve the status or trigger a synchronization.
+
+### 3.2 Observability
+To ensure the automated deployments are functioning correctly, strict observability is applied to the Argo CD infrastructure. Prometheus is configured to scrape metrics directly from Argo CD's built-in `/metrics` endpoints. 
+The case study focuses on capturing critical GitOps metrics, including:
+- Real-time data on whether the deployed application is `Synced`, `OutOfSync`, `Healthy`, or `Degraded`.
+- How long it takes Argo CD to compare the Git repository state with the live cluster state.
+- Tracking the volume of API requests, which is particularly important to monitor the frequency of actions triggered by the LLM via the MCP server.
+
+### 3.3 Visualization
+The raw time-series data collected by Prometheus is translated into actionable insights using Grafana. The case study will feature a Grafana dashboard tailored specifically for this LLM-enhanced GitOps pipeline. 
 
 ## 4. Case study high level architecture
-[Treść sekcji 4...]
+
+The high-level architecture of this case study follows a closed-loop system where deployment, AI-driven management, and monitoring occur continuously. The architecture consists of the following interacting layers:
+
+### 1. The Source of Truth
+- Git repository hosts the declarative Kubernetes manifests, like YAML files, that define the desired state of the target application.
+
+### 2. The Management & Execution Layer
+- Argo CD is the central controller running within the Kubernetes cluster. It continuously polls the git repository, compares it against the live cluster state, and applies changes to synchronize them. It also exposes APIs for external control and metrics for monitoring.
+- Target Kubernetes environment is the infrastructure where the application workloads are actually provisioned and run.
+
+### 3. The AI Interaction Layer (MCP Stack)
+- An AI agent is the user interface  where the user inputs natural language commands.
+- Argo CD MCP server is the standard interface that sits between the LLM and Argo CD. It exposes Argo CD's capabilities as "tools" that the LLM can understand and execute via secure API calls.
+
+### 4. The Observability Layer (Monitoring Stack)
+- Prometheus operates within the cluster, utilizing a pull-based mechanism to periodically scrape metric data from Argo CD's endpoints and the target application.
+- Grafana connects to Prometheus as its primary data source. It provides the visual dashboard layer, querying Prometheus to render the current and historical state of the deployment workflows in real-time.
+
+### Data Flow Summary:
+1. The user issues a natural language request to the AI agent.
+2. The LLM uses the MCP server to query or command Argo CD.
+3. Argo CD fetches the latest state from the git repository and updates the Kubernetes cluster.
+4. Simultaneously, Prometheus scrapes operational metrics from Argo CD.
+5. Grafana queries Prometheus to visualize the outcome of the actions triggered by the LLM and the overall health of the system.
 
 ## 5. Case study detailed architecture
 [Treść sekcji 5...]
