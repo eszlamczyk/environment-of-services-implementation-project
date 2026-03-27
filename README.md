@@ -109,7 +109,7 @@ The high-level architecture of this case study follows a closed-loop system wher
 4. Simultaneously, Prometheus scrapes operational metrics from Argo CD.
 5. Grafana queries Prometheus to visualize the outcome of the actions triggered by the LLM and the overall health of the system.
 
-![Data flow diagram](./diagram.png)
+![Data flow diagram](./docs/images/diagram.png)
 
 ## 5. Case study detailed architecture
 [Treść sekcji 5...]
