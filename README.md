@@ -13,16 +13,31 @@
 ## Contents list
 1. [Introduction](#1-introduction)
 2. [Theoretical background/technology stack](#2-theoretical-backgroundtechnology-stack)
+    * [2.1 ArgoCD](#21-argocd)
+    * [2.2 LLM and Promoting Interface](#22-llm-and-promoting-interface)
+    * [2.3 Model Context Protocol (MCP)](#23-model-context-protocol-mcp)
+    * [2.4 Observability - Prometheus](#24-observability---prometheus)
+    * [2.5 Visualization - Grafana](#25-visualization---grafana)
 3. [Case study concept description](#3-case-study-concept-description)
+    * [3.1 Application deployment & LLM Interaction](#31-application-deployment--llm-interaction)
+    * [3.2 Observability](#32-observability)
+    * [3.3 Visualization](#33-visualization)
 4. [Case study high level architecture](#4-case-study-high-level-architecture)
 5. [Case study detailed architecture](#5-case-study-detailed-architecture)
 6. [Environment configuration description](#6-environment-configuration-description)
 7. [Installation method](#7-installation-method)
+    * [7.1 Cluster Initialization](#71-cluster-initialization)
+    * [7.2 ArgoCD Installation](#72-argocd-installation)
+    * [7.3 Application Build and Local Registry](#73-application-build-and-local-registry)
+    * [7.4 Accessing the ArgoCD UI](#74-accessing-the-argocd-ui)
 8. [Demo deployment steps](#8-demo-deployment-steps)
     * [Configuration set-up](#configuration-set-up)
     * [Data preparation](#data-preparation)
 9. [Demo description](#9-demo-description)
     * [Execution procedure](#execution-procedure)
+        * [GitOps Mutation](#gitops-mutation)
+        * [Telemetry Verification](#telemetry-verification)
+        * [LLM-Driven Management](#llm-driven-management)
     * [Results presentation](#results-presentation)
 10. [Summary - conclusions](#10-summary---conclusions)
 11. [References](#11-references)
@@ -112,32 +127,148 @@ The high-level architecture of this case study follows a closed-loop system wher
 ![Data flow diagram](./docs/images/diagram.png)
 
 ## 5. Case study detailed architecture
-[Treść sekcji 5...]
+THe architecture is built upon a local Kubernetes cluster (using Minikube for simplicity) and structured into isolated namespaces to separate infra from the business:
+
+1. Infra namespace (`argocd`):
+    - Hosts the ArgoCD control plane (`argocd-server`, `argocd-repo-server`, `argocd-application-controller`).
+    - The `argocd-server` exposed Web UI and an API.
+    - ... **todo MCP STUFF**
+
+2. Business namespace (`default`):
+    - The core business logic (`auth-api`) is a API written in Elixir with Phoenix, running in a Docker container. It includes the `PromEx` library to expose internal `BEAM` and `HTTP` metrics at `/metrics` endpoint.
+    - PostgreSQL (`postgres-db`) database deployed as a Kubernetes Deployment and Service, providing persistence layer for Phoenix API. 
+
+3. Observability Integration:
+    - Kubernetes Service resources are adnotated with `prometheus.io/scrape: "true"` and `prometheus.io/port: "4000"`. This enables the Prometheus Operator to automatically discover the application and scrape its telemetry data.
+    - ... **TODO OBSERVABILITY**
 
 ## 6. Environment configuration description
-[Treść sekcji 6...]
+To replicate and run this environment, the following tools need to be installed on user's machine:
+- **Docker** (or docker desktop) for running the application images and running the *Minikube cluster*.
+- **Minikube** for local Kubernetes cluster emulator.
+- **kubectl** for kubernetes `CLI`
+- **git** (obviously)
+- **Github Account with write permissions in the given repository** (obviously)
+
+The network configuration involves exposing the `Argo CD UI` via port-forwarding (on `localhost:8080`) and exposing the Phoenix API via a Kubernetes `NodePort` (e.g. port `30000`), allowing direct HTTP traffic from the host machine for testing and metrics scraping.
 
 ## 7. Installation method
-[Treść sekcji 7...]
+The installation follows a declarative `GitOps-first` approach. Users/Developers should follow these precise steps to set up the environment:
+
+#### 7.1 Cluster Initialization
+Start the local Kubernetes cluster:
+```bash
+minikube start
+```
+
+#### 7.2 ArgoCD Installation
+Install the `ArgoCD` control plane into a dedicated namespace. Due to size of the CustomResourceDefinitions(`CRDs`), server-side apply is required to avoid annotation size limits:
+```bash
+kubectl create namespace argocd
+
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --server-side --force-conflicts
+```
+
+#### 7.3 Application Build and Local Registry
+Build the Elixir/Phoenix application Docker image and load it directly into Minikube's local registry to avoid pushing it to public internet registries:
+```bash
+docker build -t auth-api:local -f app.Dockerfile .
+minikube image load auth-api:local
+```
+
+#### 7.4 Accessing the ArgoCD UI
+Extract the initial admin password and forward the UI port:
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
+The UI is now accessible at https://localhost:8080 using username `admin` and the password returned from the first command.
+
+*Note: the certificates are not configured, but unless user decides to give themselves a malware, this can be ignored*  
 
 ## 8. Demo deployment steps
 
 ### Configuration set-up
-[Treść...]
+The foundation of the deployment requires a `GitHub` repository containing the Kubernetes manifests (`Deployment`,`Service` and `Secret`). The repository must include them in `k8s` directory (both for database and elixir app).
+
+Crucially, the connection string for *ecto* (database connection) must be provided via base64 encoded secret:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-secrets
+type: Opaque
+data:
+  DATABASE_URL: ZWN0bzovL3Bvc3RncmVzX2F1dGg6cGFzc3dvcmRAcG9zdGdyZXMtZGI6NTQzMi9wb3N0Z3Jlc19hdXRo
+```
 
 ### Data preparation
-[Treść...]
+Instead of manually applying the `k8s` manifests, the developer applies a single "trigger" manifest called `argo-app.yml` directly to the cluster. This file instructs ArgoCD to observe the git repository:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phoenix-auth-system
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/username/repository.git # Must be updated to actual repo
+    targetRevision: master
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+Then this file needs to be applied (via `kubectl apply -f argo-app.yml`). This hands over full control of the application lifecycle to ArgoCD. 
 
 ## 9. Demo description
 
+Demo can be separated into three scenarios:
+- GitOps mutation
+- Telementry verificiation
+- LLM-Driven management
+
 ### Execution procedure
-[Treść...]
+
+#### GitOps Mutation
+The operator modifies the `k8s/app.yaml` file in git repository (for example changes amount of replicas). After running `git push` (or merging pull request), everyone should observe ArgoCD automatically detecting the drift and provisioning two additional pods without any `kubectl` commands
+
+#### Telemetry Verification
+Using `minikube service auth-api --url` the operator accesses the application's `/metrics` endpoint with raw `PromEx` telemetry data.
+
+**TODO PROMETHEUS AND GRAFANA**
+
+#### LLM-Driven Management
+
+**TODO KRZEM**
 
 ### Results presentation
-[Treść...]
+The success of the implementation is verified visually through:
+
+- Displaying a green  "Healthy" and "Synced" tree of resources in Argo CD Dashboard. This means that we provided successful GitOps delivery.
+- Showing successful database connections and API readiness via API logs.
+- The LLM client successfully parsing and displaying Kubernetes structural data fetched via the Argo CD API.
 
 ## 10. Summary - conclusions
-[Treść sekcji 10...]
+The integration of Argo CD, observability tools, and LLMs via the Model Context Protocol represents a significant leap forward in Kubernetes cluster management.
+
+By using `git` as the single source of truth, the project eliminates configuration drift between expected code and code actually running on the cluster. Usage of ArgoCD removes need of building and publishing containers via much worse CD solutions (such as *GitHub Actions* which are known for high pricing and bad performance). 
+
+**TODO LLM KONKLUZJE**
 
 ## 11. References
-[Treść sekcji 11...]
+1. ArgoCD official docs: [https://argo-cd.readthedocs.io/en/stable](https://argo-cd.readthedocs.io/en/stable)
+2. Model Context Protocol (MCP) specs: [https://modelcontextprotocol.io/docs/getting-started/intro](https://modelcontextprotocol.io/docs/getting-started/intro)
+3. Argo CD MCP server implementation: [https://github.com/argoproj-labs/mcp-for-argocd](https://github.com/argoproj-labs/mcp-for-argocd)
+4. Elixir PromEx docs: [https://hexdocs.pm/prom_ex/readme.html](https://hexdocs.pm/prom_ex/readme.html)
+
+
+*Special thanks to claude for helping me vibecode the telemetry app*
