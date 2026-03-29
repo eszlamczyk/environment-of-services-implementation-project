@@ -66,12 +66,6 @@ defmodule Auth.Accounts do
     end
   end
 
-  def register_user_oauth(attrs) do
-    %User{}
-    |> User.oauth_changeset(attrs)
-    |> Repo.insert()
-  end
-
   def delete_account(user) do
     user
     |> User.delete_account_changeset()

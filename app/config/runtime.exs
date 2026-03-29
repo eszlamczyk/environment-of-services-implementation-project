@@ -23,14 +23,6 @@ end
 if config_env() == :prod do
   config :auth, :jwt_secret, System.fetch_env!("JWT_SECRET")
 
-  config :auth, :google_oauth,
-    client_id: System.fetch_env!("GOOGLE_CLIENT_ID"),
-    client_secret: System.fetch_env!("GOOGLE_CLIENT_SECRET")
-
-  config :auth, :backend_authorization_token, System.fetch_env!("BACKEND_AUTHORIZATION_TOKEN")
-
-  config :auth, :backend_url, System.fetch_env!("BACKEND_URL")
-
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """

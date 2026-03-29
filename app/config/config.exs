@@ -63,12 +63,6 @@ config :joken, default_signer: "signer_test"
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :auth, :google_verifier, Auth.GoogleVerifier.Real
-
-config :auth, :backend_client, Auth.BackendClient.Real
-
-config :auth, :google_client, Auth.GoogleClient.Real
-
 config :auth, Auth.PromEx,
   disabled: false,
   manual_metrics_start_delay: :no_delay,

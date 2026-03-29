@@ -21,7 +21,6 @@ defmodule AuthWeb.Router do
   scope "/auth/api/v1", AuthWeb do
     pipe_through(:api)
 
-    post "/auth/google", AuthApiController, :google_auth
     post "/users/register", UserRegistrationController, :create
     post "/users/login", UserSessionController, :create
     delete "/users/logout", UserSessionController, :delete

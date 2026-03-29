@@ -42,10 +42,3 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
-config :auth, :google_oauth,
-  client_id: "testtest.apps.googleusercontent.com",
-  client_secret: "TEST-SECRET"
-
-config :auth, :backend_url, "http://localhost:8080"
-
-config :auth, :backend_authorization_token, "agsrgbbgadfaa"
