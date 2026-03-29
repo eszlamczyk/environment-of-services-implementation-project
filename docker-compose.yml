@@ -1,0 +1,19 @@
+services:
+  db_auth:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres_auth
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres_auth
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_auth:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_auth -d postgres_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_auth:
