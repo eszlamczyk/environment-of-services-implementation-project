@@ -2,3 +2,4 @@
 _build
 deps
 app/config/env.exs
+*__pycache__/

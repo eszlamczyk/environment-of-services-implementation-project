@@ -3,9 +3,9 @@ import os
 
 import click
 import requests
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
-from utils.tools_mapper import ToolsMapper
+from llm.utils.tools_mapper import ToolsMapper
 
 load_dotenv()
 
@@ -115,6 +115,9 @@ def run_agent(user_input: str) -> None:
 @click.command()
 @click.argument("prompt")
 def main(prompt: str) -> None:
+    for key, value in dotenv_values().items():
+        if not value:
+            raise ValueError(f"Environment variable '{key}' has an invalid value: {value!r}.")
     run_agent(prompt)
 
 
