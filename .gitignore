@@ -3,3 +3,8 @@ _build
 deps
 app/config/env.exs
 *__pycache__/
+.pdm-python
+.python-version
+pdm.lock
+*llm_agent.egg-info/
+
