@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-argocd
+  template:
+    metadata:
+      labels:
+        app: mcp-argocd
+    spec:
+      containers:
+        - name: mcp-argocd
+          image: quay.io/argoproj-labs/mcp-for-argocd:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ARGOCD_SERVER
+              value: "argocd-server.argocd.svc.cluster.local"
+            - name: ARGOCD_INSECURE
+              value: "true"
+            - name: ARGOCD_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: ARGOCD_AUTH_TOKEN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-argocd
+spec:
+  selector:
+    app: mcp-argocd
+  ports:
+    - port: 8080
+      targetPort: 8080

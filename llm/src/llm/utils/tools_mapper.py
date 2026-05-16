@@ -2,7 +2,10 @@ class ToolsMapper:
     @staticmethod
     def mcp_to_llm(tool: dict):
         return {
-            "name": tool["name"],
-            "desctiption": tool["desctiption"],
-            "parameters": tool["inputSchema"]
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["inputSchema"],
+            },
         }

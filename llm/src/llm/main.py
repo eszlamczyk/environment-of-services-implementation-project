@@ -101,8 +101,7 @@ def run_agent(user_input: str) -> None:
         },
     ]
 
-    # tools = get_tools()  # uncomment when mcp finished
-    tools = None
+    tools = get_tools()
 
     while True:
         response = call_llm(messages, tools=tools)
