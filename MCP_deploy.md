@@ -46,7 +46,7 @@ kubectl wait --for=condition=available deployment/argocd-server -n argocd --time
 
 ```bash
 kubectl get secret argocd-initial-admin-secret -n argocd \
-  -o jsonpath="{.data.password}" | base64 -d && echo
+  -o jsonpath="{.data.password}" | base64 -d > secret.txt
 ```
 
 Save the output.
@@ -75,8 +75,8 @@ kubectl port-forward svc/argocd-server -n argocd 8443:443
 In **terminal 2**, log in and generate a token:
 
 ```bash
-argocd login localhost:8443 --insecure --username admin --password <password-from-step-3>
-argocd account generate-token
+argocd login localhost:8443 --insecure --username admin --password $(cat secret.txt)
+argocd account generate-token > secret.txt
 ```
 
 You will get a raw JWT string. Save it — you need it in two places:
@@ -87,7 +87,7 @@ You will get a raw JWT string. Save it — you need it in two places:
 Base64-encode without line wrapping:
 
 ```bash
-echo -n "<raw-jwt>" | base64 -w 0
+echo -n $(cat secret.txt) | base64 -w 0 > secret64.txt
 ```
 
 ---
@@ -107,9 +107,12 @@ Open `k8s/secrets.yaml` and set the `ARGOCD_AUTH_TOKEN` value to the base64-enco
 Clone the source:
 
 ```bash
-git clone https://github.com/argoproj-labs/mcp-for-argocd /tmp/mcp-for-argocd
+wget -O /tmp/argocd-mcp.tar.gz https://github.com/argoproj-labs/mcp-for-argocd/archive/refs/tags/v0.7.0.tar.gz
+cd /tmp
+tar -xzvf argocd-mcp.tar.gz
 ```
 
+For convienience, remove the version suffix from the unpacked directory.
 Replace `/tmp/mcp-for-argocd/Dockerfile` with the following (fixes Node version, CI mode, and enables stateless HTTP transport):
 
 ```dockerfile
@@ -125,7 +128,7 @@ FROM base AS prod-deps
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
 FROM base AS build
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --config.dangerously-allow-all-builds=true
 RUN pnpm run build
 
 FROM base
@@ -146,7 +149,7 @@ Point Docker at minikube's internal daemon and build:
 
 ```bash
 eval $(minikube docker-env)
-docker build --no-cache --platform linux/amd64 -t mcp-for-argocd:local /tmp/mcp-for-argocd
+docker build -t mcp-for-argocd:local /tmp/mcp-for-argocd
 ```
 
 ---
@@ -213,7 +216,7 @@ kubectl port-forward svc/mcp-argocd 3000:3000
 
 ---
 
-## Step 11 — Verify the MCP server
+## Step 11 (Optional) — Verify the MCP server
 
 ```bash
 curl -s -X POST http://localhost:3000/mcp \
@@ -232,19 +235,26 @@ You should see a JSON list of available ArgoCD tools (`list_applications`, `sync
 
 ```bash
 cd llm
-pdm run llm-agent "List all ArgoCD applications"
+pdm run llm-agent "List all clusters registered in ArgoCD"
 ```
 
 Expected output:
 
 ```
-[MCP] Calling tool: list_applications with args: {}
-[MCP] Tool result: {'items': [], ...}
+[MCP] Calling tool: list_clusters with args: {}
+[MCP] Tool result: {'metadata': {}, 'items': [{'server': 'https://kubernetes.default.svc', 'name': 'in-cluster', 'config': {'tlsClientConfig': {'insecure': False}}, 'connectionState': {'status': 'Unknown', 'message': 'Cluster has no applications and is not being monitored.', 'attemptedAt': '2026-05-16T22:23:32Z'}, 'serverVersion': '1.35.1', 'info': {'connectionState': {'status': 'Unknown', 'message': 'Cluster has no applications and is not being monitored.', 'attemptedAt': '2026-05-16T22:23:32Z'}, 'serverVersion': '1.35.1', 'cacheInfo': {}, 'applicationsCount': 0}}]}
 
-🤖: There are currently no ArgoCD applications listed.
+🤖: The following cluster is registered in ArgoCD:
+
+1. **Name:** in-cluster
+   - **Server:** [https://kubernetes.default.svc](https://kubernetes.default.svc)
+   - **Server Version:** 1.35.1
+   - **Connection Status:** Unknown
+   - **Message:** Cluster has no applications and is not being monitored.
+   - **Applications Count:** 0
+
+If you need more details or assistance, feel free to ask!
 ```
-
-The empty list is correct if no applications have been deployed yet. The full pipeline — LLM → MCP → ArgoCD — is working.
 
 ---
 
