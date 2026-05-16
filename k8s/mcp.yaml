@@ -14,15 +14,18 @@ spec:
     spec:
       containers:
         - name: mcp-argocd
-          image: quay.io/argoproj-labs/mcp-for-argocd:latest
+          image: mcp-for-argocd:local
+          imagePullPolicy: Never
           ports:
-            - containerPort: 8080
+            - containerPort: 3000
           env:
-            - name: ARGOCD_SERVER
-              value: "argocd-server.argocd.svc.cluster.local"
+            - name: ARGOCD_BASE_URL
+              value: "https://argocd-server.argocd.svc.cluster.local"
             - name: ARGOCD_INSECURE
               value: "true"
-            - name: ARGOCD_AUTH_TOKEN
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
+            - name: ARGOCD_API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: auth-secrets
@@ -36,5 +39,5 @@ spec:
   selector:
     app: mcp-argocd
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 3000
+      targetPort: 3000
