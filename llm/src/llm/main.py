@@ -25,6 +25,23 @@ def get_required_env(name: str) -> str:
     return value
 
 
+def mcp_headers() -> dict:
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "x-argocd-base-url": get_required_env("ARGOCD_BASE_URL"),
+        "x-argocd-api-token": get_required_env("ARGOCD_API_TOKEN"),
+    }
+
+
+def parse_mcp_response(response: requests.Response) -> dict:
+    # Server responds with SSE format: "event: message\ndata: {...}\n\n"
+    for line in response.text.splitlines():
+        if line.startswith("data:"):
+            return json.loads(line[len("data:"):].strip())
+    raise RuntimeError(f"No data line in MCP response: {response.text!r}")
+
+
 def call_tool(name: str, args: dict) -> dict:
     print(f"[MCP] Calling tool: {name} with args: {args}")
 
@@ -38,10 +55,10 @@ def call_tool(name: str, args: dict) -> dict:
         },
     }
 
-    response = requests.post(get_required_env("MCP_URL"), json=payload, timeout=30)
+    response = requests.post(get_required_env("MCP_URL"), json=payload, headers=mcp_headers(), timeout=30)
     response.raise_for_status()
 
-    data = response.json()
+    data = parse_mcp_response(response)
 
     if "error" in data:
         raise RuntimeError(f"MCP error: {data['error']}")
@@ -49,9 +66,11 @@ def call_tool(name: str, args: dict) -> dict:
     content = data["result"]["content"][0]["text"]
 
     try:
-        return json.loads(content)
+        result = json.loads(content)
     except json.JSONDecodeError:
-        return {"raw": content}
+        result = {"raw": content}
+    print(f"[MCP] Tool result: {result}")
+    return result
 
 
 def call_llm(messages: list[dict], tools: list[dict] | None = None) -> dict:
@@ -77,10 +96,10 @@ def get_tools() -> list[dict]:
         "method": "tools/list",
     }
 
-    response = requests.post(get_required_env("MCP_URL"), json=payload, timeout=30)
+    response = requests.post(get_required_env("MCP_URL"), json=payload, headers=mcp_headers(), timeout=30)
     response.raise_for_status()
 
-    data = response.json()
+    data = parse_mcp_response(response)
 
     if "error" in data:
         raise RuntimeError(f"MCP error: {data['error']}")
@@ -101,8 +120,7 @@ def run_agent(user_input: str) -> None:
         },
     ]
 
-    # tools = get_tools()  # uncomment when mcp finished
-    tools = None
+    tools = get_tools()
 
     while True:
         response = call_llm(messages, tools=tools)

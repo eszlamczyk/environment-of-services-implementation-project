@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-argocd
+  template:
+    metadata:
+      labels:
+        app: mcp-argocd
+    spec:
+      containers:
+        - name: mcp-argocd
+          image: mcp-for-argocd:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          env:
+            - name: ARGOCD_BASE_URL
+              value: "https://argocd-server.argocd.svc.cluster.local"
+            - name: ARGOCD_INSECURE
+              value: "true"
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
+            - name: ARGOCD_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: ARGOCD_AUTH_TOKEN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-argocd
+spec:
+  selector:
+    app: mcp-argocd
+  ports:
+    - port: 3000
+      targetPort: 3000
