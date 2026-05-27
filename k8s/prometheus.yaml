@@ -1,0 +1,174 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["nodes/metrics"]
+    verbs: ["get"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+ 
+    scrape_configs:
+ 
+      # auth-api (PromEx metrics: Application, BEAM)
+      - job_name: 'auth-api'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [default]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: _metrics_path_
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            target_label: _address_
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+ 
+      # Kubernetes cluster state metrics (pods, deployments, nodes)
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.kube-system.svc.cluster.local:8080']
+ 
+      # Kubernetes node metrics (kubelet)
+      - job_name: 'kubernetes-nodes'
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+ 
+      # Kubernetes container metrics (cAdvisor) - CPU, RAM, network per pod
+      - job_name: 'kubernetes-cadvisor'
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+ 
+      # ArgoCD application-controller: sync status, health, reconcile duration
+      - job_name: 'argocd-metrics'
+        static_configs:
+          - targets: ['argocd-metrics.argocd.svc.cluster.local:8082']
+        metrics_path: /metrics
+ 
+      # ArgoCD server: API request rate (reflects LLM/MCP activity)
+      - job_name: 'argocd-server-metrics'
+        static_configs:
+          - targets: ['argocd-server-metrics.argocd.svc.cluster.local:8083']
+        metrics_path: /metrics
+ 
+      # ArgoCD repo-server: git polling and sync duration
+      - job_name: 'argocd-repo-server-metrics'
+        static_configs:
+          - targets: ['argocd-repo-server.argocd.svc.cluster.local:8084']
+        metrics_path: /metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.51.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+            - "--web.console.templates=/usr/share/prometheus/consoles"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: storage
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  type: NodePort
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+      nodePort: 30090
