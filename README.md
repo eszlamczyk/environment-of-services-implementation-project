@@ -244,7 +244,19 @@ The operator modifies the `k8s/app.yaml` file in git repository (for example cha
 #### Telemetry Verification
 Using `minikube service auth-api --url` the operator accesses the application's `/metrics` endpoint with raw `PromEx` telemetry data.
 
-**TODO PROMETHEUS AND GRAFANA**
+Once ArgoCD syncs the `k8s/` directory, Prometheus and Grafana are deployed automatically alongside the application — no manual `kubectl apply` needed.
+ 
+**Prometheus** — to verify it is scraping metrics correctly:
+```bash
+minikube service prometheus --url
+```
+Navigate to the returned URL and check `Status → Targets` — all configured jobs (`auth-api`, `kube-state-metrics`, `argocd-metrics`, etc.) should show state `UP`.
+ 
+**Grafana**:
+```bash
+minikube service grafana --url
+```
+Login with `admin` / `admin`. The Prometheus datasource is pre-provisioned, and dashboards for ArgoCD, Kubernetes and the application are available immediately under their respective folders.
 
 #### LLM-Driven Management
 

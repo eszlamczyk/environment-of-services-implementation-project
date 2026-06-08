@@ -1,0 +1,645 @@
+apiVersion: v1
+data:
+  kubernetes.json: |-
+    {
+      "__inputs": [
+        {
+          "name": "DS_PROMETHEUS",
+          "label": "prometheus",
+          "description": "",
+          "type": "datasource",
+          "pluginId": "prometheus",
+          "pluginName": "Prometheus"
+        }
+      ],
+      "__requires": [
+        {
+          "type": "grafana",
+          "id": "grafana",
+          "name": "Grafana",
+          "version": "6.7.2"
+        },
+        {
+          "type": "panel",
+          "id": "graph",
+          "name": "Graph",
+          "version": ""
+        },
+        {
+          "type": "datasource",
+          "id": "prometheus",
+          "name": "Prometheus",
+          "version": "1.0.0"
+        },
+        {
+          "type": "panel",
+          "id": "singlestat",
+          "name": "Singlestat",
+          "version": ""
+        }
+      ],
+      "description": "Monitors Kubernetes cluster using Prometheus. Uses cAdvisor metrics only.",
+      "editable": true,
+      "gnetId": 12740,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "refresh": "10s",
+      "schemaVersion": 22,
+      "style": "dark",
+      "tags": [
+        "kubernetes"
+      ],
+      "time": {
+        "from": "now-5m",
+        "to": "now"
+      },
+      "timezone": "browser",
+      "title": "Kubernetes Monitoring Dashboard",
+      "uid": "msqzbWjWk",
+      "version": 10,
+      "templating": {
+        "list": [
+          {
+            "allValue": "",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "datasource": "Prometheus",
+            "definition": "label_values(namespace)",
+            "hide": 0,
+            "includeAll": true,
+            "multi": false,
+            "name": "namespace",
+            "options": [],
+            "query": "label_values(namespace)",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query",
+            "useTags": false
+          },
+          {
+            "allValue": ".*",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "datasource": "Prometheus",
+            "definition": "",
+            "hide": 0,
+            "includeAll": true,
+            "multi": false,
+            "name": "Node",
+            "options": [],
+            "query": "label_values(kubernetes_io_hostname)",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query",
+            "useTags": false
+          }
+        ]
+      },
+      "panels": [
+        {
+          "collapsed": false,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 33,
+          "panels": [],
+          "title": "Network I/O pressure",
+          "type": "row"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "editable": true,
+          "fill": 1,
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 1
+          },
+          "id": 32,
+          "legend": {
+            "avg": true,
+            "current": true,
+            "show": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 2,
+          "nullPointMode": "connected",
+          "targets": [
+            {
+              "expr": "sum (rate (container_network_receive_bytes_total{kubernetes_io_hostname=~\"^$Node$\"}[1m]))",
+              "interval": "10s",
+              "legendFormat": "Received",
+              "refId": "A"
+            },
+            {
+              "expr": "- sum (rate (container_network_transmit_bytes_total{kubernetes_io_hostname=~\"^$Node$\"}[1m]))",
+              "interval": "10s",
+              "legendFormat": "Sent",
+              "refId": "B"
+            }
+          ],
+          "title": "Network I/O pressure",
+          "type": "graph",
+          "yaxes": [
+            {
+              "format": "Bps",
+              "logBase": 1,
+              "show": true
+            },
+            {
+              "format": "Bps",
+              "logBase": 1,
+              "show": false
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 7
+          },
+          "id": 34,
+          "panels": [],
+          "title": "Total usage",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "format": "percent",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": true,
+            "thresholdLabels": false,
+            "thresholdMarkers": true
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 0,
+            "y": 8
+          },
+          "id": 4,
+          "targets": [
+            {
+              "expr": "sum (container_memory_working_set_bytes{id=\"/\",kubernetes_io_hostname=~\"^$Node$\"}) / sum (machine_memory_bytes{kubernetes_io_hostname=~\"^$Node$\"}) * 100",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "thresholds": "65, 90",
+          "title": "Cluster memory usage",
+          "type": "singlestat",
+          "valueFontSize": "80%"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "percent",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": true,
+            "thresholdLabels": false,
+            "thresholdMarkers": true
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 8,
+            "y": 8
+          },
+          "id": 6,
+          "targets": [
+            {
+              "expr": "sum (rate (container_cpu_usage_seconds_total{id=\"/\",kubernetes_io_hostname=~\"^$Node$\"}[1m])) / sum (machine_cpu_cores{kubernetes_io_hostname=~\"^$Node$\"}) * 100",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "thresholds": "65, 90",
+          "title": "Cluster CPU usage (1m avg)",
+          "type": "singlestat",
+          "valueFontSize": "80%"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "percent",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": true,
+            "thresholdLabels": false,
+            "thresholdMarkers": true
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 16,
+            "y": 8
+          },
+          "id": 7,
+          "targets": [
+            {
+              "expr": "sum (container_fs_usage_bytes{device=~\"/dev/sd[a-z]\",id=\"/\",kubernetes_io_hostname=~\"^$Node$\"}) / sum (container_fs_limit_bytes{device=~\"/dev/sd[a-z]\",id=\"/\",kubernetes_io_hostname=~\"^$Node$\"}) * 100",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "thresholds": "65, 90",
+          "title": "Cluster filesystem usage",
+          "type": "singlestat",
+          "valueFontSize": "80%"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "bytes",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": false
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 4,
+            "x": 0,
+            "y": 13
+          },
+          "id": 9,
+          "targets": [
+            {
+              "expr": "sum (container_memory_working_set_bytes{id=\"/\",kubernetes_io_hostname=~\"^$Node$\"})",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "title": "Used",
+          "type": "singlestat",
+          "valueFontSize": "50%"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "bytes",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": false
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 4,
+            "x": 4,
+            "y": 13
+          },
+          "id": 10,
+          "targets": [
+            {
+              "expr": "sum (machine_memory_bytes{kubernetes_io_hostname=~\"^$Node$\"})",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "title": "Total",
+          "type": "singlestat",
+          "valueFontSize": "50%"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "none",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": false
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 4,
+            "x": 8,
+            "y": 13
+          },
+          "id": 11,
+          "targets": [
+            {
+              "expr": "sum (rate (container_cpu_usage_seconds_total{id=\"/\",kubernetes_io_hostname=~\"^$Node$\"}[1m]))",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "title": "Used",
+          "type": "singlestat",
+          "valueFontSize": "50%",
+          "postfix": " cores"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "none",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": false
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 4,
+            "x": 12,
+            "y": 13
+          },
+          "id": 12,
+          "targets": [
+            {
+              "expr": "sum (machine_cpu_cores{kubernetes_io_hostname=~\"^$Node$\"})",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "title": "Total",
+          "type": "singlestat",
+          "valueFontSize": "50%",
+          "postfix": " cores"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "bytes",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": false
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 4,
+            "x": 16,
+            "y": 13
+          },
+          "id": 13,
+          "targets": [
+            {
+              "expr": "sum (container_fs_usage_bytes{device=~\"/dev/sd[a-z]\",id=\"/\",kubernetes_io_hostname=~\"^$Node$\"})",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "title": "Used",
+          "type": "singlestat",
+          "valueFontSize": "50%"
+        },
+        {
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "format": "bytes",
+          "gauge": {
+            "maxValue": 100,
+            "minValue": 0,
+            "show": false
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 4,
+            "x": 20,
+            "y": 13
+          },
+          "id": 14,
+          "targets": [
+            {
+              "expr": "sum (container_fs_limit_bytes{device=~\"/dev/sd[a-z]\",id=\"/\",kubernetes_io_hostname=~\"^$Node$\"})",
+              "interval": "10s",
+              "refId": "A"
+            }
+          ],
+          "title": "Total",
+          "type": "singlestat",
+          "valueFontSize": "50%"
+        },
+        {
+          "collapsed": false,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "id": 35,
+          "panels": [],
+          "title": "Pods CPU usage",
+          "type": "row"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "datasource": "Prometheus",
+          "decimals": 3,
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 17
+          },
+          "id": 17,
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "rightSide": true,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 2,
+          "nullPointMode": "connected",
+          "targets": [
+            {
+              "expr": "sum (rate (container_cpu_usage_seconds_total{namespace=~\"^$namespace$\",kubernetes_io_hostname=~\"^$Node$\",pod!=\"\"}[1m])) by (pod)",
+              "interval": "10s",
+              "legendFormat": "{{ pod }}",
+              "refId": "A"
+            }
+          ],
+          "title": "Pods CPU usage (1m avg)",
+          "type": "graph",
+          "yaxes": [
+            {
+              "format": "none",
+              "label": "cores",
+              "logBase": 1,
+              "show": true
+            },
+            {
+              "format": "short",
+              "logBase": 1,
+              "show": false
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 24
+          },
+          "id": 39,
+          "panels": [],
+          "title": "Pods memory usage",
+          "type": "row"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 25
+          },
+          "id": 25,
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "rightSide": true,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 2,
+          "nullPointMode": "connected",
+          "targets": [
+            {
+              "expr": "sum (container_memory_working_set_bytes{namespace=~\"^$namespace$\",kubernetes_io_hostname=~\"^$Node$\",pod!=\"\"}) by (pod)",
+              "interval": "10s",
+              "legendFormat": "{{ pod }}",
+              "refId": "A"
+            }
+          ],
+          "title": "Pods memory usage",
+          "type": "graph",
+          "yaxes": [
+            {
+              "format": "bytes",
+              "logBase": 1,
+              "show": true
+            },
+            {
+              "format": "short",
+              "logBase": 1,
+              "show": false
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 32
+          },
+          "id": 43,
+          "panels": [],
+          "title": "Pods network I/O",
+          "type": "row"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "datasource": "Prometheus",
+          "decimals": 2,
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 33
+          },
+          "id": 16,
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "rightSide": true,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 2,
+          "nullPointMode": "connected",
+          "targets": [
+            {
+              "expr": "sum (rate (container_network_receive_bytes_total{kubernetes_io_hostname=~\"^$Node$\"}[1m])) by (id)",
+              "interval": "10s",
+              "legendFormat": "-> {{ pod }}",
+              "refId": "A"
+            },
+            {
+              "expr": "- sum (rate (container_network_transmit_bytes_total{kubernetes_io_hostname=~\"^$Node$\"}[1m])) by (id)",
+              "hide": true,
+              "interval": "10s",
+              "legendFormat": "<- {{ pod }}",
+              "refId": "B"
+            }
+          ],
+          "title": "Pods network I/O (1m avg)",
+          "type": "graph",
+          "yaxes": [
+            {
+              "format": "Bps",
+              "logBase": 1,
+              "show": true
+            },
+            {
+              "format": "short",
+              "logBase": 1,
+              "show": false
+            }
+          ]
+        }
+      ]
+    }
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: grafana-dashboard-kubernetes
