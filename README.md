@@ -185,12 +185,8 @@ minikube image load auth-api:local
 #### 7.4 Accessing the ArgoCD UI
 Extract the initial admin password and forward the UI port:
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d > passwd.txt
 ```
-The UI is now accessible at https://localhost:8080 using username `admin` and the password returned from the first command.
-
-*Note: the certificates are not configured, but unless user decides to give themselves a malware, this can be ignored*  
 
 #### 7.5 Enable ArgoCD API Key and Generate Token
 
@@ -207,10 +203,7 @@ kubectl port-forward svc/argocd-server -n argocd 8443:443
 
 In **terminal 2**, log in and generate a token:
 ```bash
-kubectl get secret argocd-initial-admin-secret -n argocd \
-  -o jsonpath="{.data.password}" | base64 -d > secret.txt
-
-argocd login localhost:8443 --insecure --username admin --password $(cat secret.txt)
+argocd login localhost:8443 --insecure --username admin --password $(cat passwd.txt)
 argocd account generate-token > secret.txt
 ```
 
