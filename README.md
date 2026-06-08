@@ -30,6 +30,10 @@
     * [7.2 ArgoCD Installation](#72-argocd-installation)
     * [7.3 Application Build and Local Registry](#73-application-build-and-local-registry)
     * [7.4 Accessing the ArgoCD UI](#74-accessing-the-argocd-ui)
+    * [7.5 Enable ArgoCD API Key and Generate Token](#75-enable-argocd-api-key-and-generate-token)
+    * [7.6 Build and Deploy the MCP Server](#76-build-and-deploy-the-mcp-server)
+    * [7.7 Configure the LLM Agent](#77-configure-the-llm-agent)
+    * [7.8 Port-Forward and Verify](#78-port-forward-and-verify)
 8. [Demo deployment steps](#8-demo-deployment-steps)
     * [Configuration set-up](#configuration-set-up)
     * [Data preparation](#data-preparation)
@@ -147,6 +151,8 @@ To replicate and run this environment, the following tools need to be installed 
 - **Docker** (or docker desktop) for running the application images and running the *Minikube cluster*.
 - **Minikube** for local Kubernetes cluster emulator.
 - **kubectl** for kubernetes `CLI`
+- **argocd** CLI for token generation
+- **pdm** for managing the LLM agent Python environment
 - **git** (obviously)
 - **Github Account with write permissions in the given repository** (obviously)
 
@@ -179,12 +185,153 @@ minikube image load auth-api:local
 #### 7.4 Accessing the ArgoCD UI
 Extract the initial admin password and forward the UI port:
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d > passwd.txt
 ```
-The UI is now accessible at https://localhost:8080 using username `admin` and the password returned from the first command.
 
-*Note: the certificates are not configured, but unless user decides to give themselves a malware, this can be ignored*  
+#### 7.5 Enable ArgoCD API Key and Generate Token
+
+By default the admin account cannot issue API tokens. Enable it first:
+```bash
+kubectl patch configmap argocd-cm -n argocd --type merge \
+  -p '{"data":{"accounts.admin":"apiKey,login"}}'
+```
+
+In **terminal 1**, port-forward ArgoCD (keep it running):
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8443:443
+```
+
+In **terminal 2**, log in and generate a token:
+```bash
+argocd login localhost:8443 --insecure --username admin --password $(cat passwd.txt)
+argocd account generate-token > secret.txt
+```
+
+You will get a raw JWT string. It is needed in two places:
+- **As-is** in `llm/.env` (Step 7.7)
+- **Base64-encoded** in `k8s/secrets.yaml` (Step 7.6)
+
+Base64-encode without line wrapping:
+```bash
+echo -n $(cat secret.txt) | base64 -w 0 > secret64.txt
+```
+
+Open `k8s/secrets.yaml` and set the `ARGOCD_AUTH_TOKEN` value to the base64-encoded token:
+```yaml
+  ARGOCD_AUTH_TOKEN: "<base64-encoded-token>"
+```
+
+#### 7.6 Build and Deploy the MCP Server
+
+Download and unpack the MCP server source:
+```bash
+wget -O /tmp/argocd-mcp.tar.gz https://github.com/argoproj-labs/mcp-for-argocd/archive/refs/tags/v0.7.0.tar.gz
+cd /tmp
+tar -xzvf argocd-mcp.tar.gz
+```
+
+Replace `/tmp/mcp-for-argocd/Dockerfile` with the following (fixes Node version, CI mode, and enables stateless HTTP transport):
+```dockerfile
+FROM node:24-slim AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV CI=true
+RUN corepack enable
+COPY . /app
+WORKDIR /app
+
+FROM base AS prod-deps
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
+
+FROM base AS build
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --config.dangerously-allow-all-builds=true
+RUN pnpm run build
+
+FROM base
+COPY --from=prod-deps /app/node_modules /app/node_modules
+COPY --from=build /app/dist /app/dist
+EXPOSE 3000
+CMD [ "node", "dist/index.js", "http", "--stateless" ]
+```
+
+| Change | Reason |
+|--------|--------|
+| `node:24-slim` | The upstream `node:22-slim` tag resolved to Node 20 inside minikube's VM, which is incompatible with pnpm 11 |
+| `ENV CI=true` | Prevents pnpm from aborting when it can't find a TTY to confirm module removal |
+| `--stateless` in CMD | Skips the MCP session handshake, allowing simple stateless JSON-RPC requests |
+
+Point Docker at minikube's internal daemon and build:
+```bash
+eval $(minikube docker-env)
+docker build -t mcp-for-argocd:local /tmp/mcp-for-argocd
+```
+
+Deploy to the cluster:
+```bash
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/mcp.yaml
+```
+
+Wait for the pod to be running:
+```bash
+kubectl get pods -l app=mcp-argocd -w
+```
+
+Hit `Ctrl+C` once it shows `Running`. Confirm stateless mode is active:
+```bash
+kubectl logs -l app=mcp-argocd | grep transport
+```
+
+Expected output:
+```
+Connecting to Http Stream transport on port: 3000 (stateless mode)
+```
+
+#### 7.7 Configure the LLM Agent
+
+```bash
+cp llm/.env.example llm/.env
+```
+
+Edit `llm/.env` — all five values must be filled in:
+```
+MCP_URL = http://localhost:3000/mcp
+LLM_MODEL = gpt-4o-mini
+OPENAI_API_KEY = sk-...
+ARGOCD_BASE_URL = https://argocd-server.argocd.svc.cluster.local
+ARGOCD_API_TOKEN = eyJhbGc...
+```
+
+> `ARGOCD_BASE_URL` is the in-cluster ArgoCD address used by the MCP server pod to reach ArgoCD. `ARGOCD_API_TOKEN` is the raw JWT from Step 7.5 (not base64-encoded).
+
+Install the agent package:
+```bash
+cd llm && pdm install
+```
+
+#### 7.8 Port-Forward and Verify
+
+In a terminal (keep it running while using the agent):
+```bash
+kubectl port-forward svc/mcp-argocd 3000:3000
+```
+
+Optionally verify the MCP server responds correctly:
+```bash
+curl -s -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'x-argocd-base-url: https://argocd-server.argocd.svc.cluster.local' \
+  -H "x-argocd-api-token: <raw-jwt-from-step-7.5>" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -m json.tool
+```
+
+You should see a JSON list of available ArgoCD tools (`list_applications`, `sync_application`, etc.).
+
+> **Notes:**
+> - `NODE_TLS_REJECT_UNAUTHORIZED=0` is set in `k8s/mcp.yaml` because ArgoCD uses a self-signed certificate in this demo setup and the MCP server's `fetch`-based HTTP client has no native TLS bypass option.
+> - `imagePullPolicy: Never` in `k8s/mcp.yaml` tells Kubernetes to use only locally built images and never attempt to pull from a registry.
+> - To reset everything: `minikube delete` wipes the entire cluster state.
 
 ## 8. Demo deployment steps
 
