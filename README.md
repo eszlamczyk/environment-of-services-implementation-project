@@ -260,7 +260,30 @@ Login with `admin` / `admin`. The Prometheus datasource is pre-provisioned, and 
 
 #### LLM-Driven Management
 
-**TODO KRZEM**
+First, automatic sync is disabled manually so that ArgoCD no longer deploys on every git push:
+
+```bash
+kubectl patch application phoenix-auth-system -n argocd \
+  --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+```
+
+With auto-sync off, the operator commits a replica scale-up to 4 and pushes it to the repository. ArgoCD detects the drift but does not act — the cluster stays at 2 replicas.
+
+The operator then queries the agent in natural language:
+
+```
+pdm run llm-agent "What is the sync status of phoenix-auth-system?"
+```
+
+The LLM calls `get_application` via the MCP server and reports that the application is **OutOfSync** — the live cluster state no longer matches the git repository.
+
+Finally, the operator instructs the agent to reconcile:
+
+```
+pdm run llm-agent "Sync the phoenix-auth-system application"
+```
+
+The LLM calls `sync_application` via the MCP server. ArgoCD triggers a synchronization and scales the deployment up to 4 replicas. The result is immediately visible in the ArgoCD Web UI as **Healthy** and **Synced**.
 
 ### Results presentation
 The success of the implementation is verified visually through:
