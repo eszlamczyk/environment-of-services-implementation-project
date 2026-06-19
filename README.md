@@ -432,6 +432,23 @@ pdm run llm-agent "Sync the phoenix-auth-system application"
 
 The LLM calls `sync_application` via the MCP server. ArgoCD triggers a synchronization and scales the deployment up to 4 replicas. The result is immediately visible in the ArgoCD Web UI as **Healthy** and **Synced**.
 
+## Demo
+
+Initial status:
+![base](./docs/images/base.png)
+
+After doing auto sync (changing value in `k8s/app.yaml`):
+![first_update](./docs/images/frist_update.png)
+
+After disabling auto sync:
+![out_of_sync](./docs/images/out_of_sync.png)
+
+Demo of llm usage:
+![llm_usage](./docs/images/llm.mov)
+
+Final status:
+![final_update](./docs/images/finall_update.png)
+
 ### Results presentation
 The success of the implementation is verified visually through:
 
